@@ -1,0 +1,32 @@
+\@doanenote {1}
+macro:->\url
+{https://fred.stlouisfed.org/}
+\@endanenote 
+\@doanenote {2}
+macro:->\url
+{https://www.chicagofed.org/~/media/publications/cfnai/background/cfnai-background-pdf.pdf}
+\@endanenote 
+\@doanenote {3}
+macro:->\url
+{https://fred.stlouisfed.org/series/UMCSENT}
+\@endanenote 
+\@doanenote {4}
+macro:->\url
+{https://data.sca.isr.umich.edu/fetchdoc.php?docid=24774}
+\@endanenote 
+\@doanenote {5}
+macro:->\url
+{https://www.conference-board.org/data/consumerconfidence.cfm}
+\@endanenote 
+\@doanenote {6}
+macro:->\url
+{https://www.otexts.org/fpp/6/5}
+\@endanenote 
+\@doanenote {7}
+macro:->\url
+{https://en.wikipedia.org/wiki/Local_regression}
+\@endanenote 
+\@doanenote {8}
+macro:->\url
+{http://www.theverge.com/2015/1/5/7491071/dish-sling-tv-ott-internet-tv-announced-ces-2015}
+\@endanenote 

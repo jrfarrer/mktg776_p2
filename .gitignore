@@ -36,7 +36,7 @@ vignettes/*.pdf
 .DS_Store
 
 /data/
-  
+/model_dir/
   
 .Rproj.user
 *.xlsx

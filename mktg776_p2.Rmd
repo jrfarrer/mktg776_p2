@@ -1,8 +1,10 @@
 ---
-title: "temporary title"
+title: "Dish Network Customer Acquisition"
 header-includes:
 - \usepackage{graphicx}
 - \usepackage{float}
+- \usepackage{endnotes}
+- \let\footnote=\endnote
 date: '2017-04-05'
 output:
   bookdown::pdf_document2:
@@ -33,7 +35,7 @@ knitr::knit_hooks$set(
 ```
 
 ```{r report-load-packages, results = 'hide', include = FALSE}
-pacman::p_load(tidyverse, forcats, pander, stringr, lubridate, jrfTools, extrafont, RcppRoll, ggrepel, tm, pdftools, tidyquant)
+pacman::p_load(tidyverse, forcats, pander, stringr, lubridate, jrfTools, extrafont, RcppRoll, ggrepel, tm, pdftools, tidyquant, forecast)
 ```
 
 ```{r report-additional-setup, include = FALSE}
@@ -69,16 +71,6 @@ if (file.exists(paste0("mktg776_p2.pdf"))) {
 ```{r load_dish_dataset}
 dish <- read_csv("dish_data.csv") %>%
   mutate(quarter_date = yq(quarter))
-```
-
-```{r time_series_plot}
-dish %>%
-  ggplot(aes(x = quarter_date, y = customers_acquired)) +
-  geom_line(colour = pal538[['blue']]) +
-  geom_point(colour = pal538[['blue']], size = 1) +
-  theme_jrf(users_v = "rstudio") +
-  labs(title = "Dish Network Subscriber Acquisition", y = "Customers Acquired", x = "Quarter") +
-  scale_y_continuous(labels = scales::comma)
 ```
 
 ```{r fn_negate}
@@ -218,17 +210,6 @@ fn_wg_cov_model <- function(model, data, cov_names, population, heterogeneity = 
 }
 ```
 
-```{r kb_test_data, eval = FALSE}
-data_raw <- readxl::read_excel("KB covariate models.xlsx", skip = 3)
-kb_data <- data_raw %>%
-  rename(t = Week, x = `# HHs`) %>%
-  mutate(x = x - lag(x, default = 0)) %>%
-  filter(t <= 24)
-
-fn_wg_cov_model("Test", data = kb_data, cov_names = NULL, population = 1499, heterogeneity = "gamma", trace = T)
-fn_wg_cov_model("Test", kb_data, cov_names = c("Coupon", "AnyP"), population = 1499)
-```
-
 ```{r downlaod_fred_metrics}
 fred_metrics <-
   c("UMCSENT", "CANDH") %>% 
@@ -251,13 +232,6 @@ fred_metrics2 <-
   spread(symbol, scaled_value)
 ```
 
-```{r plot_fred_metrics}
-fred_metrics2 %>%
-  gather(metric, value, -quarter_date, -quarter) %>%
-  ggplot(aes(x = quarter_date, y = value, colour = metric)) +
-  geom_line() + geom_point()
-```
-
 ```{r seasonality}
 ts_customers_acquired <- ts(dish$customers_acquired, frequency = 4)
 decompose_acquisition <- stl(ts_customers_acquired, s.window = 7)
@@ -270,16 +244,6 @@ seasonality <-
     quarter_date = seq.Date(from = as.Date("1996-01-01"), to = as.Date("2016-12-31"), by = "quarter")
     , seasonality = scale_this(seasonality_df$seasonal)
   )
-
-dish %>%
-  bind_cols(seasonality_df) %>%
-  select(quarter_date, actual = customers_acquired, seasonal, trend, remainder) %>%
-  gather(type, value, -quarter_date) %>%
-  mutate(type = factor(type, levels = c('actual', 'seasonal', 'trend', 'remainder'))) %>%
-  ggplot(aes(x = quarter_date, y = value)) +
-  facet_wrap(~type, ncol = 1, scales = 'free_y') +
-  geom_line() +
-  theme_jrf(users_v = "rstudio")
 ```
 
 ```{r slingbox_effect}
@@ -291,11 +255,11 @@ slingbox_effect <-
 ```
 
 ```{r netflix_stock}
-netflix_financials <- tq_get("NFLX", get = "stock.prices", from = "1996-01-01")
+netflix_financials <- tq_get("NFLX", get = "stock.prices", from = "1996-01-01", to = "2017-03-31")
 
 netflix_stock <- 
   data_frame(
-    quarter_date = seq.Date(from = as.Date("1996-01-01"), to = as.Date("2016-12-31"), by = "quarter")
+    quarter_date = seq.Date(from = as.Date("1996-01-01"), to = as.Date("2017-03-31"), by = "quarter")
   ) %>%
     left_join(
       netflix_financials %>%
@@ -347,7 +311,6 @@ for (j in 1:length(cov_list_limited)) {
   
   tmp_df <- fn_wg_cov_model(model_name, dish_model_data, cov_names = cov_names, population = 60000, heterogeneity = "gamma")
   saveRDS(tmp_df, file = paste0(model_dir, model_filename, ".RDS"))
-  
 }
 ```
 
@@ -356,7 +319,7 @@ model_files <- list.files(path = model_dir, full.names = TRUE)
 wg_cov_params <- lapply(model_files, readRDS) %>% bind_rows()
 ```
 
-```{r results_by_quarter}
+```{r results-by-quarter}
 wg_cov_results <- 
   data_frame(quarter_date = seq.Date(from = as.Date("1996-01-01"), to = as.Date("2016-12-31"), by = "quarter")) %>%
   left_join(dish_model_data, by = c("quarter_date")) %>%
@@ -391,21 +354,97 @@ wg_cov_summary <-
   arrange(bic)
 ```
 
+```{r four_quarters_to_forecast}
+forecast_data <- 
+  data_frame(
+      x = rep(NA, 4)
+    , t = 85:88
+    , quarter_date = seq.Date(from = as.Date("2017-01-01"), to = as.Date("2017-12-31"), by = "quarter")
+    , quarter = quarter(quarter_date, with_year = TRUE)
+    , CANDH = c((fred_metrics2 %>% tail(1))$CANDH, 
+              forecast(auto.arima(fred_metrics2$CANDH), 3)$mean)
+    , UMCSENT = c((fred_metrics2 %>% tail(1))$UMCSENT,
+                 forecast(auto.arima(fred_metrics2$UMCSENT), 3)$mean)
+    , seasonality = scale_this(c(seasonality_df$seasonal, 
+                        forecast(decompose_acquisition, h = 4)$seasonal)) %>% tail(4)
+    , slingbox_effect = rep(0, 4)
+    , netflix_stock = c((netflix_stock %>% tail(1))$netflix_stock, 
+                        forecast(auto.arima(netflix_stock$netflix_stock), 3)$mean)
+  )
+```
+
+```{r forecasted_data}
+forecasted_data <- 
+  bind_rows(dish_model_data, forecast_data) %>% 
+  mutate(model = "CANDH & UMCSENT & seasonality & slingbox_effect & netflix_stock") %>%
+  nest(-model) %>%
+  left_join(wg_cov_params, by = "model") %>%
+  mutate(data2 = pmap(list(data, cov_names,cov_betas), fn_create_covariate_df)) %>%
+  mutate(data3 = pmap(list(r, alpha, c, cov_betas, data2, cov_names, population, heterogeneity), fn_weibull_cov)) %>%
+  select(model, population, data3) %>%
+  unnest(data3) %>%
+  mutate(
+    expected_instant = population * PT_t
+    , expected_cumulative = population * PT_less_t
+  ) %>%
+  mutate(model = "Forecast") %>%
+  select(model, quarter_date, Incremental = expected_instant, 
+         Cumulative = expected_cumulative)
+```
+
+```{r dish_actual_and_forecast}
+dish_actual <- 
+  dish %>%
+  mutate(
+    Incremental = customers_acquired
+    , Cumulative = cumsum(Incremental)
+    , model = "Actual"
+  ) %>%
+  select(model, quarter_date, Incremental, Cumulative)
+
+dish_actual_and_forecast <- 
+  bind_rows(dish_actual, forecasted_data) %>%
+  mutate(forecast = quarter_date >= as.Date("2017-01-1")) %>%
+  gather(metric, value, -model, -quarter_date, -forecast) %>%
+  mutate(metric = factor(metric, levels = c("Incremental", "Cumulative")))
+```
 
 **Word Count**: `r n_words`
 
 # Executive Summary
 
-
-Forceast Plot
+```{r executive_summary_plot}
+dish_actual_and_forecast %>%
+  filter(metric == "Incremental") %>%
+  ggplot(aes(x = quarter_date, y = value, colour = model, linetype = forecast)) +
+  geom_line() + 
+  geom_point(size = .75) + 
+  theme_jrf(users_v = "rstudio") +
+  guides(linetype = FALSE) + 
+  labs(title = "Dish Network Subscriber Acquisition", y = "Incremental Customers Acquired", 
+       x = "Quarter", colour = NULL) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_colour_manual(values = c(pal538[['red']], pal538[['blue']]))
+```
 
 # Analysis
 
+## Objective
+
+Our objective is to building a timing model to forecast the quarterly customer acquisitions for Dish Network in 2017.
+
 ## Candidate Models
 
-![Candidate Models](viz/candidate_models.png)
+The diagram below (Figure \@ref(fig:candidate-models-figure)) provides a framework and an assessment of the timing models considered for this analysis. As a baseline, individual-level model the exponential distribution was not considered because it has no duration dependence. A Weibull was used to allow for duration dependence, or for the probability of the customer signing up for Dish now, given that they have not signed up yet, to change over time. If heterogeneity were included via a gamma distribution of rate parameter $\lambda$, the exponential-gamma distribution (i.e. Pareto II) has a decreasing hazard function which is neither expected for the Dish product nor evident by growth rate in customer acquisition in the data. 
+
+The remaining red X's represent models or factors that were attempted but were not selected in the final model. Finite-mixture models of Weibull distributions produced segments with nearly all the customers indicating there was not 2 or 3 segments, but rather the customer population was homogenous. A finite-mixture model of Weibull-gamma distribution with 2 segments produced one segment with nearly all the customers and another with none. The concept of hard-core never-acquirers was introduced with a vanilla Weibull and a Weibull-gamma distribution, but both resulted in $\pi = 0$ and thus no evidence of a hard-core never-acquirer segment. Four categories of covariates were implemented: macro-trends, seasonality, firm-specific, and industry-specific. We found that the firm-specific covariate did not improve additional information not captured by the other three types of covariates.
+
+```{r candidate-models-figure, fig.cap = 'Candidate Models', out.width = '100%'}
+knitr::include_graphics(paste0(viz_dir, 'candidate_models.png'))
+```
 
 
+The resulting model is a Weibull-gamma (i.e. Burr XII) with covariates model that has a cumulative density function given by:
 
 \begin{align}
 \ P(T \le t) & = \int_{0}^{\infty} \Big(1 - e^{\lambda B(t)} \Big) \frac{\alpha^r \lambda^{r-1} e^{-\alpha \lambda}}{\Gamma(r)} d \lambda \\
@@ -420,35 +459,109 @@ where
 
 ## Covariates
 
--- Explain scaling
+The Weibull-gamma (WG) explains customer acquisition as each person in the population having some underlying, unobservable rate parameter $\lambda$ and a hazard function that changes over time with a shape determined by $c$. Furthermore, the model assume that the rate parameter $\lambda$ is distributed across the population according to a gamma distribution. Even with this individual-level story and expression of heterogeneity, we have reason to believe that Dish Network's customer acquisition may be influenced by the following external factors:
+
+1. **Macro-Trends** - how the US economy is performing and how consumers are feeling
+2. **Seasonality** - the WG does not distiguish Q2 to Q4, but consumers do
+3. **Firm-Specific** - Dish may have taken action (product launch) that can contribute to acquisition not governed by WG
+4. **Industry-Specific** - competitive forces or the changing TV enviornment may influence customer acquisition
+
+So that each external factor, or covariate, can be compared all were scaled appropriately.
 
 ### Macro-Trends
 
+To capture macro-trends, we explored different indeces published on [FRED](https://fred.stlouisfed.org/)^[https://fred.stlouisfed.org/], the Federal Reserve Economic Data portal managed by the Federal Reserve Bank of St. Louis. We sought to find metrics that would influence an American's propensity to start a new subscription service (likely transferring from another television service such as cable). We settled on two indeces that capture slightly different phenomena:
+
+1. [**CANDH**](https://fred.stlouisfed.org/series/CANDH)^[https://fred.stlouisfed.org/series/CANDH: This index is a component of the Chicago Fed's National Activity Index, which is "a weighted average of 85 monthly indicators of national
+economic activity".^[https://www.chicagofed.org/~/media/publications/cfnai/background/cfnai-background-pdf.pdf] There are multiple components of the index and CANDH encapsulates the Personal Consumption and Housing data series. CANDH includes data on retail sales, consumption of durable good, and new housing starts. *It reflect what actually happens in the economy.*
+2. [**UMCSENT**](https://fred.stlouisfed.org/series/UMCSENT)^[https://fred.stlouisfed.org/series/UMCSENT]: This measure is of *consumer sentiment* and is produced by the [University of Michigan](https://data.sca.isr.umich.edu/fetchdoc.php?docid=24774)^[https://data.sca.isr.umich.edu/fetchdoc.php?docid=24774] through a survey of consumers. UMCSENT gauges how people are *feeling*. It is perceived as a leading index of economic activity and does not necessarily reflect reality. The [Consumer Confidence Index](https://www.conference-board.org/data/consumerconfidence.cfm)^[https://www.conference-board.org/data/consumerconfidence.cfm] by The Conference Board would have been preferred measure for this macro-trend but it is not a free data set. 
+
+Below are the two indicators for the 21 years (84 quarters) of this analysis:
+
+```{r macro_trend_plot}
+fred_metrics2 %>%
+  gather(metric, value, -quarter_date, -quarter) %>%
+  ggplot(aes(x = quarter_date, y = value, colour = metric)) +
+  geom_line() + 
+  geom_point() + 
+  theme_jrf(users_v = "rstudio") + 
+  labs(title = "Macro-Trend Covariates", x = "Quarter", 
+       y = "Scaled Index", colour = NULL) + 
+  scale_color_manual(values = c(pal538[['blue']], pal538[['green']]))
+```
+
+We see the indicators follow a similar trend - there is a significant fall during the great recession of 2007-2009 - but the levels differ over the course the time period.
 
 ### Seasonality
 
+To account for seasonality in satellite TV sign-ups, we decomposed the customer acquisition time series using [STL](https://www.otexts.org/fpp/6/5)^[https://www.otexts.org/fpp/6/5] (Seasonal and Trend decomposition using Loess). [Loess](https://en.wikipedia.org/wiki/Local_regression)^[https://en.wikipedia.org/wiki/Local_regression] is simply a type of local regression used for estimating non-linear relationships. Below is the decomposition in into seasonal, trend, and remainder components:
+
+```{r seasonality-plot}
+dish %>%
+  bind_cols(seasonality_df) %>%
+  select(quarter_date, actual = customers_acquired, seasonal, trend, remainder) %>%
+  gather(type, value, -quarter_date) %>%
+  mutate(type = str_to_title(type)) %>%
+  mutate(type = factor(type, levels = c('Actual', 'Seasonal', 'Trend', 'Remainder'))) %>%
+  ggplot(aes(x = quarter_date, y = value)) +
+  facet_wrap(~type, ncol = 1, scales = 'free_y') +
+  geom_line(colour = pal538[['blue']]) +
+  theme_jrf(users_v = "rstudio") + 
+  scale_y_continuous(labels = scales::comma) +
+  labs(title = "Trend Decomposition using STL", x = NULL, y = "Customers Acquired")
+```
+
+We rescaled the seasonal component and used it as a covariate. The seasonality covariate proved extremely helpful in explaining the shape of the Dish customer acquisition time series. 
 
 ### Firm-specific
 
+It is reasonable to believe that there were specific actions taken by Dish Network contribute the acquisition of customers (or at least the company should hope so), such as product launches or marketing campaigns. There is a specific event that stands out in the time series: the launch of Sling TV in January 2016^[http://www.theverge.com/2015/1/5/7491071/dish-sling-tv-ott-internet-tv-announced-ces-2015]. Sling TV was the first internet TV service to unbundle ESPN from a typical cable/satilite package and was aimed directly at "cord cutters". In many ways it was positioned as a secondary subscription to complement your Netflix or Hulu subscription. Bloomberg reported that Sling TV surpassed 600,000 subscribers in June 2016 and 1 million by October 2016[^https://www.bloomberg.com/news/articles/2016-10-26/dish-s-sling-tv-service-seen-exceeding-1-million-subscribers].
+
+To account for the pop in acquisitions during 2015 (that broke with the plateauing or downward trend), we created a Sling TV covariate that increased slowly over the four quarters of 2015.
 
 ### Industry-specific
 
+In additional to actions taken by Dish, competitive forces in TV space likely contributed to changes in customer acquisition. A covariate we would have wanted to use for this notion is the number of subscribes to TV streaming services such as Netflix, Hulu, or Sony Vue (see Limitations for more details). However, given the idea that Netflix has stolen TV subscribers, or would-be-TV-subscribers in the case of millenials, from traditional cable and satelitte companies we used an easily available Netflix dataset: Netflix stock price. Below is the Netflix stock price averaged by quarter and scaled to conform to the other covariates:
 
-## WG + Covariates
+```{r netflix-stock-plot}
+netflix_stock %>%
+  mutate(netflix_stock = na_if(netflix_stock, 0)) %>%
+  ggplot(aes(quarter_date, netflix_stock)) + 
+  geom_line(colour = pal538[['red']]) + 
+  theme_jrf(users_v = "rstudio") + 
+  labs(title = "Netflix Stock Price", x = NULL, y = "Scaled Stock Price")
+```
 
-```{r}
+## WG with Covariates
+
+After determining the WG model was the most appropriate, we then needed to identify which combination of covariates if any would produce the best model. We run the WG + cov model for all 32 combinations of the five covariate ($2^5 = 32$), which includes no covariates at all. Below are the top 10 models by BIC:
+
+```{r candidate_model_summary}
 wg_cov_summary %>%
-  top_n(10, desc(bic)) %>%
+  mutate(
+    CANDH = ifelse(str_detect(model, "CANDH"), "X", NA)
+    , UMCSENT = ifelse(str_detect(model, "UMCSENT"), "X", NA)
+    , `Seasonality` = ifelse(str_detect(model, "seasonality"), "X", NA)
+    , `SlingTV` = ifelse(str_detect(model, "slingbox_effect"), "X", NA)
+    , `Netflix` = ifelse(str_detect(model, "netflix_stock"), "X", NA)
+  ) %>%
+  head(10) %>%
   select(
-    Covariates = model
+     CANDH
+    , UMCSENT
+    , `Seasonality`
+    , `SlingTV`
+    , `Netflix`
     , `# Params` = params
     , `LL` = neg_ll
-    , `Median APE` = mdape
+    , `MdAPE` = mdape
     , BIC = bic
   ) %>%
-  pander(caption = "Top 10 Weibull-Gamma with Covariate Model by BIC", 
-         round = c(0, 0, 0, 4, 0))
+  pander(caption = "Top 10 Weibull-Gamma with Covariate Models by BIC", 
+         round = c(0, 0, 0, 0, 0, 0, 0, 4, 0), missing = "", split.table = 100)
 ```
+
+First, we note that the log-likelihood ($LL$), the median average percent error ($MdAPE$), and BIC are all relatively similar for these top models. Second, we note that for all 10 models, the seasonality coviarate appears. Third, we see that the Netflix covariate is present in almost all of the top models. Here we find that Sling TV does not add that much more information - the MdAPE is slightly lower, LL is nearly the same, and BIC is marginally better. In fact, the first two models and the second two models nearly look the same graphically. The first and third models above are shown in the instant and cumulative tracking plots below:
 
 ```{r instant_plot}
 instant_plot_data <-
@@ -471,7 +584,8 @@ ggplot(instant_plot_data) +
   labs(title = "Incremental Customer Acquisitions", subtitle = "Top 2 Models", 
        x = "Quarter", y = "Customers Acquired", colour = NULL) +
   scale_y_continuous(labels = scales::comma) +
-  scale_color_manual(values = c(pal538[['red']], pal538[['blue']], pal538[['green']]))
+  scale_color_manual(values = c(pal538[['red']], pal538[['blue']], pal538[['green']])) + 
+  guides(col = guide_legend(nrow = 2))
 ```
 
 ```{r cumulative_plot}
@@ -496,17 +610,173 @@ ggplot(cumulative_plot_data) +
   labs(title = "Cumulative Customer Acquisitions", subtitle = "Top 2 Models", 
        x = "Quarter", y = "Cumulative Customers Acquired", colour = NULL) +
   scale_y_continuous(labels = scales::comma) +
-  scale_color_manual(values = c(pal538[['red']], pal538[['blue']], pal538[['green']]))
+  scale_color_manual(values = c(pal538[['red']], pal538[['blue']], pal538[['green']])) + 
+  guides(col = guide_legend(nrow = 2))
+```
+
+With regards to the model parameters $r$, $\alpha$, and $c$, the table below so the estimates for the top 10 models by BIC:
+
+```{r}
+wg_cov_params %>%
+  left_join(wg_cov_summary, by = "model") %>%
+  arrange(bic) %>%
+  head(10) %>%
+  mutate(
+    CANDH = ifelse(str_detect(model, "CANDH"), "X", NA)
+    , UMCSENT = ifelse(str_detect(model, "UMCSENT"), "X", NA)
+    , `Seasonality` = ifelse(str_detect(model, "seasonality"), "X", NA)
+    , `SlingTV` = ifelse(str_detect(model, "slingbox_effect"), "X", NA)
+    , `Netflix` = ifelse(str_detect(model, "netflix_stock"), "X", NA)
+  ) %>%
+  select(
+     CANDH
+    , UMCSENT
+    , `Seasonality`
+    , `SlingTV`
+    , `Netflix`
+    , r
+    , alpha
+    , c
+    , `BIC` = bic
+  )  %>%
+  pander(caption = "WG Parameter Estimates for Top 10 Models by BIC", 
+         round = c(0, 0, 0, 0, 0, 0, 0, 3, 4), missing = "", split.table = 100)
+```
+
+We find extremely large values for $r$ and $\alpha$, which confirms our belief that there is not much heterogeneity in the population and why none of the latent-class models were successful. The plot below shows the distribution of the rate parameter $\lambda$ for the second model below:
+
+```{r distribution-of-lambda-plot}
+wg_cov_params %>%
+  left_join(wg_cov_summary, by = "model") %>%
+  arrange(bic) %>%
+  head(1) %>%
+  mutate(lambda = map(r, alpha, .f = function(.x, .y) {as_tibble(rgamma(n =10000, .x, .y))})) %>%
+  select(model, lambda) %>%
+  unnest() %>%
+  ggplot(aes(x = value)) +
+  geom_density(colour = pal538[['blue']]) +
+  theme_jrf(users_v = "rstudio") +
+  labs(x = expression(lambda), y = expression(f(lambda)), 
+       title = "Estimated Distributions of Lambda", 
+       subtitle = "WG + CANDH & UMCSENT & seasonality & netflix_stock")
+```
+
+We see that the density of $\lambda$ is nearly normal with a large number of people having the same rate parameter value. There is some heterogeneity, but there is are not a significant portion of people with high or low $\lambda$s. In other words, we would not consider using a pure Weibull with covariates upon seeing plot.
+
+Next, we review the hazard function of the WG + cov model. We are surprised to find values of $c > 2$ as this is typically rare. A value of $c > 1$ whose hazard function is increasing implies that purchase rate increases over time at the individual level. The functions are not monotonically increasing due to the covariates. Below shows the hazard function for the top 9 models. 
+
+```{r harzard-function-plot}
+wg_cov_results %>%
+  mutate(
+    f_t = expected_instant / population
+    , F_t = expected_cumulative / population
+    , h_t = f_t / (1 - F_t)
+  ) %>%
+  inner_join(
+    wg_cov_summary 
+    , by = "model"
+  ) %>%
+  arrange(bic) %>%
+  mutate(rnk = dense_rank(mdape)) %>%
+  filter(rnk <= 9) %>%
+  mutate(model = paste0("Model ", rnk)) %>%
+  ggplot(aes(t, h_t)) + 
+  geom_line(colour = pal538[['blue']]) + 
+  facet_wrap(~model, nrow = 3) +
+  theme_jrf(users_v = "rstudio") +
+  labs(title = "Hazard Function for Top 9 Models", y = expression(h(t)), 
+       x = expression(t))
 ```
 
 # Results
 
 ## Final Model
 
-### Forecast 2017
+As our final model, we select the candidate model with the lowest BIC. This model does not include the artificial Sling TV coviariate. We are glad that this coviariate does not add much value because it would have been unhelpful for future prediction.
 
+```{r}
+wg_cov_params %>%
+  left_join(wg_cov_summary, by = "model") %>%
+  arrange(bic) %>%
+  head(1) %>%
+  select(r, `$\\alpha$` = alpha, c, `Covariates` = cov_names, `Covariate $\\beta$s` = cov_betas, LL = neg_ll, BIC = bic) %>%
+  gather(`&nbsp;`, value) %>% 
+  pander(caption = "Summary of Final Model", split.cells = c(20, 48))
+```
+
+## Forecast 2017
+
+In order to make predication of Dish Network's subscriber acquisition in 2017, the covariates needed to be carried into the future. The table below summarizes how each covariates values were estimated:
+
+|Covariate|Implementation|
+|:------:|:------------------------------------------:|
+|Macro-Trends|Index values for CAND and UMCSENT were released for the months in Q1 2017 and were used. For 2017Q2 to 2017Q4, we created an ARIMA model^[https://en.wikipedia.org/wiki/Autoregressive_integrated_moving_average] using all the quarterly data from 1996Q1 to 2017Q1 and predicted 3 periods ahead. An automatic method for selecting the parameters of the ARIMA model was used.|
+|Seasonality|Using the STL decomposition, the acquisition were forecasted 4 periods ahead and the seasonal component was used.|
+|Firm-Specific|Not necessary as not included in model|
+|Industry-Specific|Netflix stock prices from 2017Q1 were used and then an (automatically selected) ARIMA model using all the quarterly stock prices from 1996Q1 to 2017Q1 were used to predicted 3 periods ahead.|
+
+The plot below shows the forecasts of the four covariates:
+
+```{r forecast-covariates-plot}
+bind_rows(dish_model_data,
+          dish_model_data %>% 
+            tail(1) %>% 
+            mutate(t = t +1)
+          , forecast_data) %>%
+  select(quarter_date, t, CANDH, UMCSENT, seasonality, netflix_stock) %>%
+  gather(covariate, value, -quarter_date, -t) %>%
+  mutate(forecast = t >= 85) %>%
+  ggplot(aes(x = quarter_date, y = value, colour = covariate, linetype = forecast)) +
+  geom_line() +
+  scale_colour_manual(values = c(pal538[['red']], pal538[['blue']], pal538[['green']], pal538[['dkgray']])) +
+  theme_jrf(users_v = "rstudio") +
+  labs(title = "Forecasts of Covariates", x = "Quarter", y = "Scaled Value", 
+       colour = NULL) + 
+   guides(linetype = FALSE)
+```
+
+Incorporating these forecasts, we forecast the number of customers acquired in each quarter to be 
+
+```{r forecast-customer-acquisition-table}
+dish_actual_and_forecast %>% 
+  filter(metric == "Incremental" & forecast == TRUE) %>%
+  mutate(
+    Quarter = quarter(quarter_date, with_year = TRUE)
+    , Quarter = str_replace(Quarter, "\\.","Q")) %>%
+  select(Quarter, `Customers Acquired` = value) %>%
+  pander(caption = "Forecasted Customer Acquisition", round = c(0, 0))
+```
+
+The figure below shows the incremental and cumulative tracking plots with the forecasts:
+
+```{r fig.width = 7, fig.height = 3.7}
+dish_actual_and_forecast %>%
+  bind_rows(
+    dish_actual_and_forecast %>% 
+      filter(quarter_date == "2016-10-01") %>% 
+      mutate(quarter_date = quarter_date + months(3), forecast = TRUE)
+  ) %>%
+  ggplot(aes(x = quarter_date, y = value, colour = model, linetype = forecast)) +
+  geom_line() + 
+  facet_wrap(~ metric, scales = 'free') +
+  theme_jrf(users_v = "rstudio") +
+  guides(linetype = FALSE) + 
+  labs(title = "Dish Network Subscriber Acquisition", y = "Customers", 
+       x = "Quarter", colour = NULL) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_colour_manual(values = c(pal538[['red']], pal538[['blue']]))
+```
 
 # Limitations
 
 # Appendix
+
+1. Population of 60 M
+2. Missing explanation for jump in acquisitions for 2016Q3
+3. Revenue of Netflix / Hulu / Sony (all streaming services)
+4. Forecasts of covariates
+5. Did not try segmenting on c
+
+
+\theendnotes
 
