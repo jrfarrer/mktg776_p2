@@ -387,7 +387,7 @@ forecasted_data <-
     expected_instant = population * PT_t
     , expected_cumulative = population * PT_less_t
   ) %>%
-  mutate(model = "Forecast") %>%
+  mutate(model = "Model") %>%
   select(model, quarter_date, Incremental = expected_instant, 
          Cumulative = expected_cumulative)
 ```
@@ -415,6 +415,11 @@ dish_actual_and_forecast <-
 
 ```{r executive_summary_plot}
 dish_actual_and_forecast %>%
+  bind_rows(
+    dish_actual_and_forecast %>% 
+      filter(quarter_date == "2016-10-01" & model == "Model") %>% 
+      mutate(quarter_date = quarter_date, forecast = TRUE)
+  ) %>%
   filter(metric == "Incremental") %>%
   ggplot(aes(x = quarter_date, y = value, colour = model, linetype = forecast)) +
   geom_line() + 
@@ -437,7 +442,7 @@ Our objective is to building a timing model to forecast the quarterly customer a
 
 The diagram below (Figure \@ref(fig:candidate-models-figure)) provides a framework and an assessment of the timing models considered for this analysis. As a baseline, individual-level model the exponential distribution was not considered because it has no duration dependence. A Weibull was used to allow for duration dependence, or for the probability of the customer signing up for Dish now, given that they have not signed up yet, to change over time. If heterogeneity were included via a gamma distribution of rate parameter $\lambda$, the exponential-gamma distribution (i.e. Pareto II) has a decreasing hazard function which is neither expected for the Dish product nor evident by growth rate in customer acquisition in the data. 
 
-The remaining red X's represent models or factors that were attempted but were not selected in the final model. Finite-mixture models of Weibull distributions produced segments with nearly all the customers indicating there was not 2 or 3 segments, but rather the customer population was homogenous. A finite-mixture model of Weibull-gamma distribution with 2 segments produced one segment with nearly all the customers and another with none. The concept of hard-core never-acquirers was introduced with a vanilla Weibull and a Weibull-gamma distribution, but both resulted in $\pi = 0$ and thus no evidence of a hard-core never-acquirer segment. Four categories of covariates were implemented: macro-trends, seasonality, firm-specific, and industry-specific. We found that the firm-specific covariate did not improve additional information not captured by the other three types of covariates.
+The remaining red X's represent models or factors that were attempted but were not selected in the final model. Finite-mixture models of Weibull distributions produced segments with nearly all the customers indicating there was not 2 or 3 segments, but rather the customer population was homogeneous. A finite-mixture model of Weibull-gamma distribution with 2 segments produced one segment with nearly all the customers and another with none. The concept of hard-core never-acquirers was introduced with a vanilla Weibull and a Weibull-gamma distribution, but both resulted in $\pi = 0$ and thus no evidence of a hard-core never-acquirer segment. Four categories of covariates were implemented: macro-trends, seasonality, firm-specific, and industry-specific. We found that the firm-specific covariate did not improve additional information not captured by the other three types of covariates.
 
 ```{r candidate-models-figure, fig.cap = 'Candidate Models', out.width = '100%'}
 knitr::include_graphics(paste0(viz_dir, 'candidate_models.png'))
@@ -462,17 +467,17 @@ where
 The Weibull-gamma (WG) explains customer acquisition as each person in the population having some underlying, unobservable rate parameter $\lambda$ and a hazard function that changes over time with a shape determined by $c$. Furthermore, the model assume that the rate parameter $\lambda$ is distributed across the population according to a gamma distribution. Even with this individual-level story and expression of heterogeneity, we have reason to believe that Dish Network's customer acquisition may be influenced by the following external factors:
 
 1. **Macro-Trends** - how the US economy is performing and how consumers are feeling
-2. **Seasonality** - the WG does not distiguish Q2 to Q4, but consumers do
+2. **Seasonality** - the WG does not distinguish Q2 to Q4, but consumers do
 3. **Firm-Specific** - Dish may have taken action (product launch) that can contribute to acquisition not governed by WG
-4. **Industry-Specific** - competitive forces or the changing TV enviornment may influence customer acquisition
+4. **Industry-Specific** - competitive forces or the changing TV environment may influence customer acquisition
 
 So that each external factor, or covariate, can be compared all were scaled appropriately.
 
 ### Macro-Trends
 
-To capture macro-trends, we explored different indeces published on [FRED](https://fred.stlouisfed.org/)^[https://fred.stlouisfed.org/], the Federal Reserve Economic Data portal managed by the Federal Reserve Bank of St. Louis. We sought to find metrics that would influence an American's propensity to start a new subscription service (likely transferring from another television service such as cable). We settled on two indeces that capture slightly different phenomena:
+To capture macro-trends, we explored different indices published on [FRED](https://fred.stlouisfed.org/)^[https://fred.stlouisfed.org/], the Federal Reserve Economic Data portal managed by the Federal Reserve Bank of St. Louis. We sought to find metrics that would influence an American's propensity to start a new subscription service (likely transferring from another television service such as cable). We settled on two indices that capture slightly different phenomena:
 
-1. [**CANDH**](https://fred.stlouisfed.org/series/CANDH)^[https://fred.stlouisfed.org/series/CANDH: This index is a component of the Chicago Fed's National Activity Index, which is "a weighted average of 85 monthly indicators of national
+1. [**CANDH**](https://fred.stlouisfed.org/series/CANDH)^[https://fred.stlouisfed.org/series/CANDH]: This index is a component of the Chicago Fed's National Activity Index, which is "a weighted average of 85 monthly indicators of national
 economic activity".^[https://www.chicagofed.org/~/media/publications/cfnai/background/cfnai-background-pdf.pdf] There are multiple components of the index and CANDH encapsulates the Personal Consumption and Housing data series. CANDH includes data on retail sales, consumption of durable good, and new housing starts. *It reflect what actually happens in the economy.*
 2. [**UMCSENT**](https://fred.stlouisfed.org/series/UMCSENT)^[https://fred.stlouisfed.org/series/UMCSENT]: This measure is of *consumer sentiment* and is produced by the [University of Michigan](https://data.sca.isr.umich.edu/fetchdoc.php?docid=24774)^[https://data.sca.isr.umich.edu/fetchdoc.php?docid=24774] through a survey of consumers. UMCSENT gauges how people are *feeling*. It is perceived as a leading index of economic activity and does not necessarily reflect reality. The [Consumer Confidence Index](https://www.conference-board.org/data/consumerconfidence.cfm)^[https://www.conference-board.org/data/consumerconfidence.cfm] by The Conference Board would have been preferred measure for this macro-trend but it is not a free data set. 
 
@@ -508,20 +513,20 @@ dish %>%
   geom_line(colour = pal538[['blue']]) +
   theme_jrf(users_v = "rstudio") + 
   scale_y_continuous(labels = scales::comma) +
-  labs(title = "Trend Decomposition using STL", x = NULL, y = "Customers Acquired")
+  labs(title = "Trend Decomposition to Determine Seasonality", x = NULL, y = "Customers Acquired")
 ```
 
-We rescaled the seasonal component and used it as a covariate. The seasonality covariate proved extremely helpful in explaining the shape of the Dish customer acquisition time series. 
+We scaled the seasonal component and used it as a covariate. The seasonality covariate proved extremely helpful in explaining the shape of the Dish customer acquisition time series. 
 
 ### Firm-specific
 
-It is reasonable to believe that there were specific actions taken by Dish Network contribute the acquisition of customers (or at least the company should hope so), such as product launches or marketing campaigns. There is a specific event that stands out in the time series: the launch of Sling TV in January 2016^[http://www.theverge.com/2015/1/5/7491071/dish-sling-tv-ott-internet-tv-announced-ces-2015]. Sling TV was the first internet TV service to unbundle ESPN from a typical cable/satilite package and was aimed directly at "cord cutters". In many ways it was positioned as a secondary subscription to complement your Netflix or Hulu subscription. Bloomberg reported that Sling TV surpassed 600,000 subscribers in June 2016 and 1 million by October 2016[^https://www.bloomberg.com/news/articles/2016-10-26/dish-s-sling-tv-service-seen-exceeding-1-million-subscribers].
+It is reasonable to believe that there were specific actions taken by Dish Network contribute the acquisition of customers (or at least the company should hope so), such as product launches or marketing campaigns. There is a specific event that stands out in the time series: the launch of Sling TV in January 2016^[http://www.theverge.com/2015/1/5/7491071/dish-sling-tv-ott-internet-tv-announced-ces-2015]. Sling TV was the first internet TV service to unbundle ESPN from a typical cable/satellite package and was aimed directly at "cord cutters". In many ways it was positioned as a secondary subscription to complement your Netflix or Hulu subscription. Bloomberg reported that Sling TV surpassed 600,000 subscribers in June 2016 and 1 million by October 2016^[https://www.bloomberg.com/news/articles/2016-10-26/dish-s-sling-tv-service-seen-exceeding-1-million-subscribers].
 
 To account for the pop in acquisitions during 2015 (that broke with the plateauing or downward trend), we created a Sling TV covariate that increased slowly over the four quarters of 2015.
 
 ### Industry-specific
 
-In additional to actions taken by Dish, competitive forces in TV space likely contributed to changes in customer acquisition. A covariate we would have wanted to use for this notion is the number of subscribes to TV streaming services such as Netflix, Hulu, or Sony Vue (see Limitations for more details). However, given the idea that Netflix has stolen TV subscribers, or would-be-TV-subscribers in the case of millenials, from traditional cable and satelitte companies we used an easily available Netflix dataset: Netflix stock price. Below is the Netflix stock price averaged by quarter and scaled to conform to the other covariates:
+In additional to actions taken by Dish, competitive forces in TV space likely contributed to changes in customer acquisition. A covariate we would have wanted to use for this notion is the number of subscribes to TV streaming services such as Netflix, Hulu, or Sony Vue (see Limitations for more details). However, given the idea that Netflix has stolen TV subscribers, or would-be-TV-subscribers in the case of millennials, from traditional cable and satellite companies we used an easily available Netflix dataset: Netflix stock price. Below is the Netflix stock price averaged by quarter and scaled to conform to the other covariates:
 
 ```{r netflix-stock-plot}
 netflix_stock %>%
@@ -534,36 +539,39 @@ netflix_stock %>%
 
 ## WG with Covariates
 
-After determining the WG model was the most appropriate, we then needed to identify which combination of covariates if any would produce the best model. We run the WG + cov model for all 32 combinations of the five covariate ($2^5 = 32$), which includes no covariates at all. Below are the top 10 models by BIC:
+After determining the WG model was the most appropriate, we then needed to identify which combination of covariates if any would produce the best model. We run the WG + cov model for all 32 combinations of the five covariate ($2^5 = 32$), which includes no covariates at all. Below are the top 10 models by BIC (a summary of the remaining 22 can be found in the [Appendix]):
 
-```{r candidate_model_summary}
-wg_cov_summary %>%
+```{r candidate-models-summary}
+candidate_models_summary <-
+  wg_cov_summary %>%
   mutate(
     CANDH = ifelse(str_detect(model, "CANDH"), "X", NA)
     , UMCSENT = ifelse(str_detect(model, "UMCSENT"), "X", NA)
     , `Seasonality` = ifelse(str_detect(model, "seasonality"), "X", NA)
-    , `SlingTV` = ifelse(str_detect(model, "slingbox_effect"), "X", NA)
+    , `Sling TV` = ifelse(str_detect(model, "slingbox_effect"), "X", NA)
     , `Netflix` = ifelse(str_detect(model, "netflix_stock"), "X", NA)
   ) %>%
-  head(10) %>%
   select(
      CANDH
     , UMCSENT
     , `Seasonality`
-    , `SlingTV`
+    , `Sling TV`
     , `Netflix`
     , `# Params` = params
     , `LL` = neg_ll
     , `MdAPE` = mdape
     , BIC = bic
-  ) %>%
+  )
+  
+candidate_models_summary %>%
+  head(10) %>%
   pander(caption = "Top 10 Weibull-Gamma with Covariate Models by BIC", 
          round = c(0, 0, 0, 0, 0, 0, 0, 4, 0), missing = "", split.table = 100)
 ```
 
-First, we note that the log-likelihood ($LL$), the median average percent error ($MdAPE$), and BIC are all relatively similar for these top models. Second, we note that for all 10 models, the seasonality coviarate appears. Third, we see that the Netflix covariate is present in almost all of the top models. Here we find that Sling TV does not add that much more information - the MdAPE is slightly lower, LL is nearly the same, and BIC is marginally better. In fact, the first two models and the second two models nearly look the same graphically. The first and third models above are shown in the instant and cumulative tracking plots below:
+First, we note that the log-likelihood ($LL$), the median average percent error ($MdAPE$), and $BIC$ are all relatively similar for these top models. Second, we note that for all 10 models, the seasonality coviarate appears. Third, we see that the Netflix covariate is present in almost all of the top models. Here we find that Sling TV does not add that much more information - the $MdAPE$ is slightly lower, $LL$ is nearly the same, and $BIC$ is marginally better. In fact, the first two models and the second two models nearly look the same graphically. The first and third models above are shown in the instant and cumulative tracking plots below:
 
-```{r instant_plot}
+```{r instant-plot}
 instant_plot_data <-
   dish %>%
   select(quarter_date, expected_instant = customers_acquired) %>%
@@ -588,7 +596,7 @@ ggplot(instant_plot_data) +
   guides(col = guide_legend(nrow = 2))
 ```
 
-```{r cumulative_plot}
+```{r cumulative-plot}
 cumulative_plot_data <-
   dish %>%
   mutate(expected_cumulative = cumsum(customers_acquired)) %>%
@@ -616,7 +624,7 @@ ggplot(cumulative_plot_data) +
 
 With regards to the model parameters $r$, $\alpha$, and $c$, the table below so the estimates for the top 10 models by BIC:
 
-```{r}
+```{r top-model-parameter}
 wg_cov_params %>%
   left_join(wg_cov_summary, by = "model") %>%
   arrange(bic) %>%
@@ -654,7 +662,7 @@ wg_cov_params %>%
   select(model, lambda) %>%
   unnest() %>%
   ggplot(aes(x = value)) +
-  geom_density(colour = pal538[['blue']]) +
+  geom_density(colour = pal538[['blue']], fill = pal538[['blue']], alpha = 1/3) +
   theme_jrf(users_v = "rstudio") +
   labs(x = expression(lambda), y = expression(f(lambda)), 
        title = "Estimated Distributions of Lambda", 
@@ -694,14 +702,22 @@ wg_cov_results %>%
 
 As our final model, we select the candidate model with the lowest BIC. This model does not include the artificial Sling TV coviariate. We are glad that this coviariate does not add much value because it would have been unhelpful for future prediction.
 
-```{r}
+```{r final-model-value}
 wg_cov_params %>%
   left_join(wg_cov_summary, by = "model") %>%
   arrange(bic) %>%
   head(1) %>%
-  select(r, `$\\alpha$` = alpha, c, `Covariates` = cov_names, `Covariate $\\beta$s` = cov_betas, LL = neg_ll, BIC = bic) %>%
-  gather(`&nbsp;`, value) %>% 
-  pander(caption = "Summary of Final Model", split.cells = c(20, 48))
+  mutate(
+    r = round(r, 0)
+    , alpha = round(alpha, 0)
+    , c = round(c, r)
+    , LL = round(neg_ll, 1)
+    , BIC = round(bic, 1)
+  ) %>%
+  mutate(cov_betas = map(cov_betas, round, 4)) %>%
+  select(r, `$\\alpha$` = alpha, c, `Covariates` = cov_names, `Covariate $\\beta$s` = cov_betas, LL, BIC) %>%
+  gather(`&nbsp;`, Value) %>% 
+  pander(caption = "Summary of Final Model", split.cells = c(20, 45))
 ```
 
 ## Forecast 2017
@@ -709,7 +725,7 @@ wg_cov_params %>%
 In order to make predication of Dish Network's subscriber acquisition in 2017, the covariates needed to be carried into the future. The table below summarizes how each covariates values were estimated:
 
 |Covariate|Implementation|
-|:------:|:------------------------------------------:|
+|:---------:|:---------------------------------------------:|
 |Macro-Trends|Index values for CAND and UMCSENT were released for the months in Q1 2017 and were used. For 2017Q2 to 2017Q4, we created an ARIMA model^[https://en.wikipedia.org/wiki/Autoregressive_integrated_moving_average] using all the quarterly data from 1996Q1 to 2017Q1 and predicted 3 periods ahead. An automatic method for selecting the parameters of the ARIMA model was used.|
 |Seasonality|Using the STL decomposition, the acquisition were forecasted 4 periods ahead and the seasonal component was used.|
 |Firm-Specific|Not necessary as not included in model|
@@ -753,8 +769,8 @@ The figure below shows the incremental and cumulative tracking plots with the fo
 dish_actual_and_forecast %>%
   bind_rows(
     dish_actual_and_forecast %>% 
-      filter(quarter_date == "2016-10-01") %>% 
-      mutate(quarter_date = quarter_date + months(3), forecast = TRUE)
+      filter(quarter_date == "2016-10-01" & model == "Model") %>% 
+      mutate(quarter_date = quarter_date, forecast = TRUE)
   ) %>%
   ggplot(aes(x = quarter_date, y = value, colour = model, linetype = forecast)) +
   geom_line() + 
@@ -769,13 +785,20 @@ dish_actual_and_forecast %>%
 
 # Limitations
 
-# Appendix
-
 1. Population of 60 M
 2. Missing explanation for jump in acquisitions for 2016Q3
 3. Revenue of Netflix / Hulu / Sony (all streaming services)
 4. Forecasts of covariates
 5. Did not try segmenting on c
+
+# Appendix
+
+```{r}
+candidate_models_summary %>%
+  tail(22) %>%
+  pander(caption = "Bottom 22 Weibull-Gamma with Covariate Models by BIC", 
+         round = c(0, 0, 0, 0, 0, 0, 0, 4, 0), missing = "", split.table = 100)
+```
 
 
 \theendnotes
