@@ -46,3 +46,7 @@ macro:->\url
 macro:->\url
 {https://secondmeasure.com/}
 \@endanenote 
+\@doanenote {13}
+macro:->\url
+{https://stat.ethz.ch/R-manual/R-devel/library/stats/html/nlminb.html}
+\@endanenote 

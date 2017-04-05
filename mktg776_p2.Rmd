@@ -414,7 +414,7 @@ dish_actual_and_forecast <-
 
 # Executive Summary
 
-In this analysis we attempt to identify and implement a timing model that will best predict Dish Network's subscriber acquisition in 2017. Our starting dataset is quarterly subscriber acquisition from 1996 to 2016. Using a Weibull distribution to explain a customer's time to subscription we attempt to account for heterogeneity with segments (finite-mixture model), including hard-core never-acquirers, and a continuous Gamma distribution. We find that a Weibull-Gamma model performs well but alone is insufficient to explain Dish Network's customer acquisition. By adding covariates that describe macro-economic trends, consumer sentiment, seasonality, and the competitor Netflix's performance, we improve our explanation of Dish' Network's customer acquisition. The plot below presents Dish's actual incremental subcriber acquisition by quarter and our model and forecast (dashed) for 2017.
+In this analysis we attempt to identify and implement a timing model that will best predict Dish Network's subscriber acquisition in 2017. Our starting dataset is quarterly subscriber acquisition from 1996 to 2016. Using a Weibull distribution to explain a customer's time to subscribe we attempt to account for heterogeneity with segments (finite-mixture models), including hard-core never-acquirers, and a continuous Gamma distribution. We find that a Weibull-Gamma model performs well but alone is insufficient to explain Dish Network's customer acquisition. By adding covariates that describe macroeconomic trends, consumer sentiment, seasonality, and the competitor Netflix's performance, we improve our explanation of Dish' Network's customer acquisition. The plot below presents Dish's actual incremental subscriber acquisition by quarter and our model and forecast (dashed) for 2017.
 
 ```{r executive_summary_plot, fig.width = 6, fig.height = 3.4}
 dish_actual_and_forecast %>%
@@ -447,7 +447,7 @@ Our objective is to build a timing model to forecast the quarterly customer acqu
 
 The diagram below (Figure \@ref(fig:candidate-models-figure)) provides a framework and an assessment of the timing models considered for this analysis. As a baseline, individual-level model the exponential distribution was not considered because it has no duration dependence. A Weibull was used to allow for duration dependence, the probability of the customer signing up for Dish now, given that they have not signed up yet, to change over time. If heterogeneity were included via a gamma distribution of rate parameter $\lambda$, the exponential-gamma distribution (i.e. Pareto II) has a decreasing hazard function which is neither expected for the Dish product nor evident by growth rate in customer acquisition in the data. 
 
-The remaining red X's represent models or factors that were attempted but were not selected in the final model. Finite-mixture models of Weibull distributions produced segments with nearly all 60M customers indicating there was not true segments, but rather the customer population was rather homogeneous. In addition, a finite-mixture model of Weibull-Gamma distribution with 2 segments produced one segment with nearly all the customers and another with none. The concept of hard-core never-acquirers was introduced with a vanilla Weibull and a Weibull-Gamma distribution, but both resulted in $\pi = 0$ and thus no evidence of a hard-core never-acquirer segment. Four categories of covariates were implemented: macro-trends, seasonality, firm-specific, and industry-specific. We found that the firm-specific covariate did not capture enough new information for forecasts to warrant inclusion.
+The remaining red X's represent models or factors that were attempted but were not selected in the final model. Finite-mixture models of Weibull distributions produced segments with nearly all 60M customers indicating there were not true segments, but rather the customer population was rather homogeneous. In addition, a finite-mixture model of Weibull-Gamma distribution with 2 segments produced one segment with nearly all the customers and another with none. The concept of hard-core never-acquirers was introduced with a vanilla Weibull and a Weibull-Gamma distribution, but both resulted in $\pi = 0$ and thus no evidence of a hard-core never-acquirer segment. Four categories of covariates were implemented: macro-trends, seasonality, firm-specific, and industry-specific. We found that the firm-specific covariate did not capture enough new information for forecasts to warrant inclusion.
 
 ```{r candidate-models-figure, fig.cap = 'Candidate Models', out.width = '100%'}
 knitr::include_graphics(paste0(viz_dir, 'candidate_models.png'))
@@ -469,18 +469,18 @@ where
 
 ## Covariates
 
-The Weibull-Gamma (WG) explains customer acquisition as each person in the population having some underlying, unobservable time to buy rate $\lambda$ and a hazard function that changes over time with a shape determined by $c$. Furthermore, the model assumes that the rate parameter $\lambda$ is distributed across the population according to a gamma distribution. Even with this individual-level story and expression of heterogeneity, we have reason to believe that Dish Network's customer acquisition may be influenced by the following external factors:
+The Weibull-Gamma (WG) model explains customer acquisition as each person in the population having some underlying, unobservable time to buy rate $\lambda$ and a hazard function that changes over time with a shape determined by $c$. Furthermore, the model assumes that the rate parameter $\lambda$ is distributed across the population according to a gamma distribution. Even with this individual-level story and expression of heterogeneity, we have reason to believe that Dish Network's customer acquisition may be influenced by the following external factors:
 
-1. **Macro-Trends** - how the US economy is performing and how consumers are feeling
+1. **Macro-Trends** - the performance of the US economy and how consumers feel
 2. **Seasonality** - the WG does not distinguish Q2 to Q4, but consumers do
-3. **Firm-Specific** - Dish may have taken actions (e.g. product launchs) that can contribute to acquisition not governed by the WG
+3. **Firm-Specific** - Dish may have taken actions (e.g. product launches) that can contribute to acquisition not governed by the WG
 4. **Industry-Specific** - competitive forces or the changing TV environment may influence customer acquisition
 
 So that each external factor, or covariate, can be compared all were scaled appropriately.
 
 ### Macro-Trends
 
-To capture macro-trends, we explored different indices published on [FRED](https://fred.stlouisfed.org/)^[https://fred.stlouisfed.org/], the Federal Reserve Economic Data portal managed by the Federal Reserve Bank of St. Louis. We sought to find metrics that would influence an American's propensity to start a new subscription service (likely transferring from another television service such as cable). We settled on two indices that capture slightly different phenomena:
+To capture macro-trends, we explored different indices published on [FRED](https://fred.stlouisfed.org/)^[https://fred.stlouisfed.org/], the Federal Reserve Economic Data portal managed by the Federal Reserve Bank of St. Louis. We sought to find metrics that would influence Americans' propensity to start a new subscription service (likely transferring from another television service such as cable). We settled on two indices that capture slightly different phenomena:
 
 1. [**CANDH**](https://fred.stlouisfed.org/series/CANDH)^[https://fred.stlouisfed.org/series/CANDH]: This index is a component of the Chicago Fed's National Activity Index, which is "a weighted average of 85 monthly indicators of national
 economic activity".^[https://www.chicagofed.org/~/media/publications/cfnai/background/cfnai-background-pdf.pdf] There are multiple components of the index and CANDH encapsulates the Personal Consumption and Housing data series. CANDH includes data on retail sales, consumption of durable goods, and new housing starts. *It reflects what actually happens in the economy.*
@@ -531,7 +531,7 @@ We scaled the seasonal component and used it as a covariate. The seasonality cov
 
 It is reasonable to believe that there were specific actions taken by Dish Network that contributed to the acquisition of customers (or at least the company should hope so), such as product launches or marketing campaigns. There is a specific event that stands out in the time series: the launch of Sling TV in January 2016^[http://www.theverge.com/2015/1/5/7491071/dish-sling-tv-ott-internet-tv-announced-ces-2015]. Sling TV was the first internet TV service to unbundle ESPN from a typical cable/satellite package and was aimed directly at "cord cutters". In many ways it was positioned as a secondary subscription to complement your Netflix or Hulu subscription. Bloomberg reported that Sling TV surpassed 600,000 subscribers in June 2016 and 1 million by October 2016^[https://www.bloomberg.com/news/articles/2016-10-26/dish-s-sling-tv-service-seen-exceeding-1-million-subscribers].
 
-To account for the pop in acquisitions during 2015 (that broke with the plateauing or downward trend), we created a Sling TV covariate that increased slowly over the four quarters of 2015.
+To account for the pop in acquisitions during 2015 (that broke with the plateauing or downward previous trend), we created a Sling TV covariate that increased over the four quarters of 2015.
 
 ### Industry-specific
 
@@ -551,7 +551,7 @@ netflix_stock %>%
 
 ## WG with Covariates
 
-After determining the WG model was the most appropriate, we then needed to identify which combination of covariates, if any, would produce the best model. We ran the WG with cov model for all 32 combinations of the five covariates ($2^5 = 32$), which includes no covariates at all. Below are the top 10 models by BIC (a summary of the remaining 22 can be found in the [Appendix]):
+After determining the WG model was the most appropriate, we then needed to identify which combination of covariates, if any, would produce the best model. We ran the WG with coviarates model for all 32 combinations of the five covariates ($2^5 = 32$), which includes no covariates at all. Below are the top 10 models by BIC (a summary of the remaining 22 can be found in the [Appendix]):
 
 ```{r candidate-models-summary}
 candidate_models_summary <-
@@ -581,9 +581,9 @@ candidate_models_summary %>%
          round = c(0, 0, 0, 0, 0, 0, 0, 4, 0), missing = "", split.table = 100)
 ```
 
-First, we note that the log-likelihood ($LL$), the median absolute percent error ($MdAPE$), and $BIC$ are all relatively similar for these top models. Second, we note that for all 10 models, the Netflix coviarate appears. Third, we see that the seasonality covariate is present in almost all of the top models. Here we find that Sling TV does not add that much more information. For the second model with all covariates compared to the top model with Sling TV, the $MdAPE$ is slightly lower, $LL$ is nearly the same, and $BIC$ is marginally worse In fact, the first two models and the second two models nearly look the same graphically. As such, the first and third models above are shown in the incremental and cumulative tracking plots below:
+First, we note that the log-likelihood ($LL$), the median absolute percent error ($MdAPE$), and $BIC$ are all relatively similar for these top models. Second, we note that for all 10 models, the Netflix coviarate appears. Third, we see that the seasonality covariate is present in almost all of the top models. Here we find that Sling TV does not add that much more information. For the second model with all covariates compared to the top model with Sling TV, the $MdAPE$ is slightly lower, $LL$ is nearly the same, and $BIC$ is marginally worse. In fact, the first two models and the second two models nearly look the same graphically. As such, the first and third models above are shown in the incremental and cumulative tracking plots below:
 
-```{r instant-plot}
+```{r incremental-plot}
 instant_plot_data <-
   dish %>%
   select(quarter_date, expected_instant = customers_acquired) %>%
@@ -685,9 +685,9 @@ wg_cov_params %>%
        subtitle = "WG with CANDH, UMCSENT, Seasonality, and Netflix Stock")
 ```
 
-We see that the distribution of $\lambda$ is nearly symmetric with a large number of people having the same rate parameter value. There is some heterogeneity, but there is are not a significant portion of people with high or low $\lambda$s. In other words, we would not consider using a pure Weibull with covariates upon seeing plot, but segments do not appear fruitful either.
+We see that the distribution of $\lambda$ is nearly symmetric with a large number of people having the same rate parameter value. There is some heterogeneity, but there is are not a significant portion of people with high or low $\lambda$'s. In other words, we would not consider using a pure Weibull with covariates upon seeing plot, but segments do not appear fruitful either.
 
-Next, we review the hazard function of the WG with covariates model. We are surprised to find values of $c > 2$ as this is rare. A value of $c > 1$ whose hazard function is (monotonically) increasing implies that purchase rate increases over time at the individual level. The functions are not monotonically increasing due to the covariates. Below shows the hazard function for the top 9 models, all with increasing hazard functions. The implication is that given you have not subscribed to Dish yet, the probability that you subscribe now increases over time.
+Next, we review the hazard function of the WG with covariates model. We are surprised to find values of $c > 2$ as this is rare. A value of $c > 1$ whose hazard function is (monotonically) increasing implies that purchase rate increases over time at the individual level. The functions are not monotonically increasing due to the covariates. The plot below shows the hazard function for the top 9 models, all with increasing hazard functions. The implication is that given you have not subscribed to Dish yet, the probability that you subscribe now increases over time.
 
 ```{r hazard-function-plot}
 wg_cov_results %>%
@@ -716,7 +716,7 @@ wg_cov_results %>%
 
 ## Final Model
 
-As our final model, we select the candidate model with the lowest BIC. To ensure that an additional parameter is necessary, we use the likelihood ratio test ($df = 1$) with the next-best-model that does not include the covariate CANDH. We find a very small $p$-value and conclude that the models are not the same and thus the model with four covariates is valuable and our final model.
+As our final model, we select the candidate model with the lowest BIC. To ensure that an additional parameter is necessary, we use the likelihood ratio test ($df = 1$) with the next-best-model that does not include the covariate CANDH. We find a very small $p$-value and conclude that the models are not the same and thus the model with four covariates is valuable and confirm this as our final model.
 
 ```{r lrt-table}
 candidate_models_summary %>% 
@@ -730,7 +730,7 @@ candidate_models_summary %>%
          round = c(0,0,0,0,0,0,1,4,4), split.table = Inf)
 ```
 
-This model does not include the artificial Sling TV coviariate. We are glad to remove this coviariate as it will not be helpful for future prediction.
+This model does not include the artificial Sling TV coviariate. We are glad to remove this coviariate as it will not be helpful for future prediction. Below is a summary of our final model:
 
 ```{r final-model-value}
 wg_cov_params %>%
@@ -752,7 +752,7 @@ wg_cov_params %>%
 
 ## Forecast 2017
 
-In order to make predication of Dish Network's subscriber acquisition in 2017, the covariates needed to be carried into the future. The table below summarizes how each covariates values were estimated for 2017:
+In order to make predications of Dish Network's subscriber acquisition in 2017, the covariates needed to be carried into the future. The table below summarizes how each covariates values were estimated for 2017:
 
 |Covariate|Implementation|
 |:---------:|:---------------------------------------------:|
@@ -821,13 +821,15 @@ dish_actual_and_forecast %>%
 
 # Limitations
 
-1. **Population Size**. In this analysis we used the assumption that the overall customer population (N) was 60M. In a subsequent analysis we would attempt to implement (1) a truncated model and (2) variation of N to identify its impact on parameter estimates.
-2. **Better Metric for Industry-Specific Covariate**. We would have preferred to use the number of subscribers for all US TV streaming services. A secondary measure could have been revenue for Netflix, but this was only readily available for recent time period. A future analyis would implement subscriber information from a market data firm such as [Second Measure](https://secondmeasure.com/)^[https://secondmeasure.com/].
+1. **Population Size**. In this analysis we used the assumption that the overall customer population (N) was 60M. In a subsequent analysis we would attempt to implement (1) a truncated model and (2) vary N to identify its impact on parameter estimates.
+2. **Better Metric for Industry-Specific Covariate**. We would have preferred to use the number of subscribers for all US TV streaming services. A secondary measure could have been revenue for Netflix, but this was only readily available for recent time period. A future analysis would implement subscriber information from a market data firm such as [Second Measure](https://secondmeasure.com/)^[https://secondmeasure.com/].
 3. **Jump in 2016Q3 - 2016Q4 Acquisitions**. The Sling TV covariate sought to capture the impact of subscribers to this new service. The artificial covariate seemed reasonable to cover 2015, but given the drop-off in Q1 and Q2 and lack of product news in 2016 did not seem reasonable to cover 2016. However, the two periods at the end of 2016 indicate a phase shift may have occurred and could cause our forecasts, which are much lower, to be significantly different.
 4. **Forecasting Covariates**. The fact that we forecasted covariates is likely to cause issues with our forecast of the three remaining periods of 2017.
 5. **Segmenting $c$**. While we attempted segments with Weibull and Weibull-Gamma models, we did not attempt to segment $c$ in isolation while keeping $\lambda$ and $r$ fixed.
 
 # Appendix
+
+## Bottom 22 Models
 
 ```{r}
 candidate_models_summary %>%
@@ -836,6 +838,11 @@ candidate_models_summary %>%
          round = c(0, 0, 0, 0, 0, 0, 0, 4, 0), missing = "", split.table = 100)
 ```
 
+## Technical Notes
+
+All MLE optimization of the Weibull-Gamma with covariates model ewas performed using [nlminb](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/nlminb.html)^[https://stat.ethz.ch/R-manual/R-devel/library/stats/html/nlminb.html].
+
+The full source code that created this document can be found in the [Github repo](https://github.com/jrfarrer/mktg776_p2/).
 
 \renewcommand{\notesname}{References}
 \theendnotes
