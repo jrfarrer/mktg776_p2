@@ -840,7 +840,7 @@ candidate_models_summary %>%
 
 ## Technical Notes
 
-All MLE optimization of the Weibull-Gamma with covariates model ewas performed using [nlminb](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/nlminb.html)^[https://stat.ethz.ch/R-manual/R-devel/library/stats/html/nlminb.html].
+All MLE optimization of the Weibull-Gamma with covariates model was performed using [nlminb](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/nlminb.html)^[https://stat.ethz.ch/R-manual/R-devel/library/stats/html/nlminb.html].
 
 The full source code that created this document can be found in the [Github repo](https://github.com/jrfarrer/mktg776_p2/).
 
